@@ -1,8 +1,7 @@
-# File to scrape Rotowire for player and team statistics
+# File to scrape Rotowire and NBA.com for player and team statistics
 
 import requests
 import bs4
-import mechanicalsoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -10,15 +9,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
 
 
-
-class Browser:
-
-    def __init__(self):
-        self.browser = webdriver.PhantomJS()
-        url = 'https://www.rotowire.com/basketball/player/pascal-siakam-3922'
-        self.page = self.browser.get(url)
-        self.html = self.page.page_source
-
+# Create browser session to access NBA.com
 def start_session():
     service = Service('./chromedriver')
     chrome_options = Options()
@@ -33,7 +24,6 @@ def start_session():
 
 
     return page_source
-#__next > div.Layout_base__6IeUC.Layout_withSubNav__ByKRF.Layout_justNav__2H4H0 > div.Layout_mainContent__jXliI > main > div.MaxWidthContainer_mwc__ID5AG > section > div > div.PlayerList_content__kwT7z > div.PlayerList_filters__n_6IL > div.PlayerList_pagination__c5ijE > div >
 
 
 # get full list of NBA players from NBA.com
