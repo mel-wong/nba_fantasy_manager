@@ -1,4 +1,5 @@
 # File to scrape Rotowire and NBA.com for player and team statistics
+import time
 
 import requests
 import bs4
@@ -7,30 +8,30 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
 
-# Create browser session to access NBA.com
+# Create browser session to access different stat websites
 def start_session():
     service = Service('./chromedriver')
     chrome_options = Options()
     chrome_options.add_argument("--headless")
+    chrome_options.add_argument('window-size=1920x1080')
     driver = webdriver.Chrome(service = service,options=chrome_options)
-    driver.get('https://www.nba.com/players')
-    dropdown = 'div.Pagination_pageDropdown__KgjBU > div > label > div>select'
-    dropdown = Select(driver.find_element(by=By.CSS_SELECTOR,value=dropdown))
-    dropdown.select_by_index(0)
 
-    page_source = driver.page_source
-
-
-    return page_source
+    return driver
 
 
 # get full list of NBA players from NBA.com
 def get_player_list(driver,player_list):
 
-    #res = requests.get('https://www.nba.com/players')
-    soup = bs4.BeautifulSoup(driver, "lxml")
+    driver.get('https://www.nba.com/players')
+    dropdown = 'div.Pagination_pageDropdown__KgjBU > div > label > div>select'
+    dropdown = Select(driver.find_element(by=By.CSS_SELECTOR,value=dropdown))
+    dropdown.select_by_index(0)
+    page_source = driver.page_source
+    soup = bs4.BeautifulSoup(page_source, "lxml")
     table = soup.select("table[class=players-list]")
 
     for t in table:
@@ -39,8 +40,8 @@ def get_player_list(driver,player_list):
 
         # Ignore header row
         for row in rows[1:]:
-            cells = row.select('p')
-            player_list.append(cells[0].text + ' ' + cells[1].text)
+            name = row.select('p')
+            player_list.append(name[0].text + ' ' + name[1].text)
 
 
 
@@ -55,24 +56,37 @@ def get_page_access(browser):
     else:
         return None
 
-# get player's projected stats
-def scrape_projected(browser,player):
-    page_html = get_page_access(browser)
-    if page_html is None:
-        print('Site access failed!')
+# get player's projected stats from Roto
+def scrape_projected(driver,player):
 
-    # Rotowire page successfully accessed
+    # Checks if already on Rotowire site
+    if driver.current_url is not None and 'rotowire' in driver.current_url:
+        print('Already on rotowire')
     else:
-        #search_box = page_html.select('top-nav-section__search')
-        tab = page_html.select("div[id=nbaStats] > div[id=webix_hs_center]> table")
-        #tab = tab_div.select("div", {"id": "webix_hs_center"})
+        driver.get('https://www.rotowire.com')
+        search_css = "#search-for-players"
+        search_xpath = '/html/body/div/div/header/div[1]/div[2]/div[3]/div[1]/input'
+        #input_element = driver.find_element(by=By.CSS_SELECTOR,value=search_css)
+        input_element = driver.find_element(by=By.XPATH, value=search_xpath)
+        actions = ActionChains(driver)
+        actions.move_to_element(input_element)
+        actions.send_keys(player)
+        actions.send_keys(Keys.ENTER)
+        actions.perform()
+        #driver.execute_script('arguments[0].send_keys(player)',input_element)
+        #input_element.click()
+        #input_element.send_keys(player)
+       # input_element.send_keys(Keys.ENTER)
 
-        #tds = page_html.find_all('td', {'class': 'webix_hcell align-r bg-black-squeeze'})
-        print(tab)
+        time.sleep(3)
+
+        print(driver.current_url)
 
 
-        #search_box.select('input')['value'] = player
-        #player_page = browser.submit(search_box,browser.page.url)
+
+
+    search_css = "div[=nbaStats] > div[id=webix_hs_center]> table"
+
 
 
 
@@ -82,5 +96,6 @@ if __name__ == '__main__':
 
     player_list = []
     dr = start_session()
-    get_player_list(dr,player_list)
-    print(len(player_list))
+    scrape_projected(dr,'siakam')
+    #get_player_list(dr,player_list)
+    #print(player_list[0])
