@@ -1,6 +1,7 @@
 # File to scrape Rotowire and NBA.com for player and team statistics
 import time
 import bs4
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -142,6 +143,30 @@ def scrape_all_projected(driver, player_list, all_projected_stats):
     json.dump(all_projected_stats, out_file)
     out_file.close()
 
+# Called when adding a player
+def scrape_player_current(player,player_url_list, driver):
+
+    curr_stats = []
+
+    url = player_url_list[player]
+    driver.get(url)
+
+    # Give page time to load stats before scraping
+    time.sleep(1)
+    page_source = driver.page_source
+    soup = bs4.BeautifulSoup(page_source, "lxml")
+
+    table = soup.select('div.webix_ss_body > div.webix_ss_center > div')
+
+    cols = table[0].findAll('div',recursive=False)
+
+    # Ignore age column
+    for col in cols[1:]:
+        rows = col.findAll('div')
+        curr_stats.append(rows[-1].text)
+
+    return curr_stats
+
 
 if __name__ == '__main__':
 
@@ -153,5 +178,6 @@ if __name__ == '__main__':
 
     # player_list = {}
     dr = start_session()
-    all_projected_stats = {}
-    scrape_all_projected(dr, player_list, all_projected_stats)
+    #all_projected_stats = {}
+    #scrape_all_projected(dr, player_list, all_projected_stats)
+    scrape_player_current('Precious Achiuwa',player_list,dr)
