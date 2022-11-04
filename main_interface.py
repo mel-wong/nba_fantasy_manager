@@ -168,6 +168,12 @@ class Team:
                 totals_proj[i] += temp_proj[i]
                 totals_curr[i] += temp_curr[i]
 
+        # Fix ft perc and fg perc
+        totals_proj[10]=totals_proj[10]/len(self.roster)
+        totals_curr[10] = totals_curr[10]/len(self.roster)
+        totals_proj[11]=totals_proj[11]/len(self.roster)
+        totals_curr[11] = totals_curr[11]/len(self.roster)
+
         # Convert numpy array to list for csv writing
         totals_proj = list(totals_proj)
         totals_curr = list(totals_curr)
