@@ -4,32 +4,34 @@ import stat_scraper
 import os.path
 import json
 import csv
+import numpy as np
+from collections import namedtuple
 
 # Defines each player
 class Player:
 
-    # Statistical categories per player
-    def __init__(self,name):
+    # Player information and stats
+    def __init__(self,name, team='', roto_url='', team_url='', curr_week_games=[], games_played=[], min_per_gm=[],
+                 fg_perc=[], ft_perc=[],threes_made=[], pts=[], rebs=[], assists=[],steals=[], blocks=[], turnovers=[] ):
         self.name = name
-        self.team = ''
+        self.team = team
+
+        self.roto_url = roto_url
+        self.team_url = team_url
+        self.curr_week_games = curr_week_games
 
         # stats will be saved as 2 item arrays: [Rotowire projected stat, live current season stat]
-        self.games_played = []
-        self.min_per_gm = []
-        self.fg_perc = []
-        self.ft_perc = []
-        self.threes_made = []
-        self.pts = []
-        self.rebs = []
-        self.assists = []
-        self.steals = []
-        self.blocks = []
-        self.turnovers = []
-
-    # Returns the NBA team that the player plays for
-    def get_team(self, name):
-        #stat_scraper
-        pass
+        self.games_played = games_played
+        self.min_per_gm = min_per_gm
+        self.fg_perc = fg_perc
+        self.ft_perc = ft_perc
+        self.threes_made = threes_made
+        self.pts = pts
+        self.rebs = rebs
+        self.assists = assists
+        self.steals = steals
+        self.blocks = blocks
+        self.turnovers = turnovers
 
 
     # Returns the number of games that week
@@ -37,7 +39,7 @@ class Player:
         #stat_scraper
         pass
 
-    # Populates all stats with both projected and current season stats
+    # Populates all stats with both projected and current season stats, weekly games
     # Called when new player is added
     def populate_player_stats(self,projected_stats, player_url, driver):
 
@@ -56,17 +58,30 @@ class Player:
         self.ft_perc = [projected_stats[self.name][9], curr_season[9]]
         self.turnovers = [projected_stats[self.name][10], curr_season[10]]
 
-    # Returns all player stats as a list
+        self.team, self.team_url = stat_scraper.scrape_player_team(driver, self.name, player_url)
+        self.roto_url = player_url[self.name]
+        self.curr_week_games = stat_scraper.scrape_player_weekly_games(driver, self.team_url)
+
+
+    # Returns all player weekly cumulative stats as a list for csv writing
     def player_stats(self):
 
-        projected_player_stats = [self.name,'(Projected)',self.games_played[0],self.min_per_gm[0],self.pts[0],self.rebs[0],self.assists[0],
-                                  self.steals[0],self.blocks[0],self.threes_made[0],self.fg_perc[0],self.ft_perc[0],
-                                  self.turnovers[0]]
-        curr_play_stats = [self.name,'(Current Season)',self.games_played[1],self.min_per_gm[1],self.pts[1],self.rebs[1],self.assists[1],
-                           self.steals[1],self.blocks[1],self.threes_made[1],self.fg_perc[1],self.ft_perc[1],
-                           self.turnovers[1]]
+        projected_player_stats = [self.name,'(Projected)',self.games_played[0],self.min_per_gm[0]*self.curr_week_games,
+                                  self.pts[0]*self.curr_week_games,self.rebs[0]*self.curr_week_games,self.assists[0]*self.curr_week_games,
+                                  self.steals[0]*self.curr_week_games,self.blocks[0]*self.curr_week_games,
+                                  self.threes_made[0]*self.curr_week_games,self.fg_perc[0],self.ft_perc[0],
+                                  self.turnovers[0]*self.curr_week_games]
+        curr_play_stats = [self.name,'(Current Season)',self.games_played[1],self.min_per_gm[1]*self.curr_week_games,
+                           self.pts[1]*self.curr_week_games,self.rebs[1]*self.curr_week_games,self.assists[1]*self.curr_week_games,
+                           self.steals[1]*self.curr_week_games,self.blocks[1]*self.curr_week_games,
+                           self.threes_made[1]*self.curr_week_games,self.fg_perc[1],self.ft_perc[1],
+                           self.turnovers[1]*self.curr_week_games]
 
         return projected_player_stats, curr_play_stats
+
+    # Encoder to save player as JSON string for future script runs
+    def to_json(self):
+        return json.dumps(self,default=lambda o:o.__dict__)
 
     # Updates current season stats
     def get_curr_season_stats(self,name):
@@ -83,10 +98,14 @@ class Team:
         self.max_players = max_players
 
     # Checks if additional players can be added based on max team size
-    def can_add_player(self):
+    def can_add_player(self, player_name):
 
         if len(self.roster) >= self.max_players:
             print('Maximum number of players reached!')
+            return False
+
+        elif player_name in self.roster:
+            print('Player already exists!')
             return False
 
         else:
@@ -94,7 +113,7 @@ class Team:
 
     # Add player to roster
     def add_player(self,name,projected_stats, player_url, driver):
-        if self.can_add_player() == True:
+        if self.can_add_player(name) == True:
 
             # Populate player object with stats
             new_player = Player(name=name)
@@ -111,8 +130,9 @@ class Team:
                 break
         else:
             print('Player not in roster')
+            print(f'Roster size: {len(self.roster)}')
 
-    # Convert each rostered player object into list
+    # Convert each rostered player object into list for csv writing
     def team_data(self):
 
         stats = []
@@ -123,10 +143,40 @@ class Team:
 
         return stats
 
+    # Save team's player objects for future use
+    def team_to_json(self):
 
-    # Update season stats
-    def update_season_stats(self):
-        stat_scraper
+        json_data = []
+
+        for player in self.roster:
+            json_data.append(player.to_json())
+
+        return json_data
+
+
+
+    # Calculate team total weekly stats
+    def get_totals(self):
+
+        totals_proj = np.zeros(13)
+        totals_curr = np.zeros(13)
+
+        for player in self.roster:
+
+            temp_proj, temp_curr = player.player_stats()
+            for i in range(2,len(temp_proj)):
+                totals_proj[i] += temp_proj[i]
+                totals_curr[i] += temp_curr[i]
+
+        # Convert numpy array to list for csv writing
+        totals_proj = list(totals_proj)
+        totals_curr = list(totals_curr)
+
+        totals_proj[0] = totals_curr[0] = 'Weekly Totals'
+        totals_proj[1] = 'Projected Stats'
+        totals_curr[1] = 'Current Season'
+
+        return totals_proj, totals_curr
 
 
 # Checks player name input. If valid entry, returns full player name
@@ -139,8 +189,43 @@ def check_player_input(input_name,player_list):
     print('Player does not exist')
     return None
 
+# Export team player objects as JSON for future use
+def export_teams_json(my_team,opp_team):
 
-# Main module
+    # Save my team data
+    my_json = my_team.team_to_json()
+    with open('my_team.json', 'w') as f:
+        json.dump(my_json,f)
+
+    # Save opposing team data
+    opp_json = opp_team.team_to_json()
+    with open('opp_team.json','w') as g:
+        json.dump(opp_json,g)
+
+# Decode team JSON file
+def import_team_json(file,team):
+
+    with open(file,'r') as f:
+        json_list_of_strs = json.load(f)
+
+    # go through each player string
+    for i in json_list_of_strs:
+        player = json.loads(i,object_hook=as_player)
+        team.roster.add(player)
+
+def as_player(json_str):
+
+    i = json_str
+    if 'name' in json_str:
+        return Player(name=i['name'], team=i['team'], roto_url=i['roto_url'], team_url=i['team_url'],
+                      curr_week_games=i['curr_week_games'], games_played=i['games_played'],
+                      min_per_gm=i['min_per_gm'],
+                      fg_perc=i['fg_perc'], ft_perc=i['ft_perc'], threes_made=i['threes_made'], pts=i['pts'],
+                      rebs=i['rebs'], assists=i['assists'], steals=i['steals'], blocks=i['blocks'],
+                      turnovers=i['turnovers'])
+
+
+        # Main module
 def main():
 
     print('Initializing Stats...')
@@ -171,27 +256,10 @@ def main():
         dr = stat_scraper.start_session()
         stat_scraper.scrape_all_projected(dr,player_url_list,all_projected_stats)
 
-    # Checks if Team Stats.csv has already been created so that we don't need to repeat player input
-    if os.path.exists('Team Stats.csv'):
-
-        # File exists so read my team and opposing team players
-        with open('Team Stats.csv',newline='') as f:
-            reader = csv.reader(f)
-
-            # Skip header
-            for i in range(4):
-                next(reader)
-
-            for row in reader:
-
-
-
 
     # Start a webdriver to grab stats
     # Stats populated through javascript so need to use webdriver
     driver = stat_scraper.start_session()
-
-    print('Done Initialization!')
 
     # Input the maximum allowable players per team
     while True:
@@ -205,6 +273,19 @@ def main():
     # Initialize two teams with the max number of players
     my_team = Team(max_players=max_players)
     opp_team = Team(max_players=max_players)
+
+    # Checks if my_team.json has already been created so that we don't need to repeat player input
+    if os.path.exists('my_team.json'):
+
+        # File exists so read my team and opposing team players
+        import_team_json('my_team.json',my_team)
+
+    # Checks if opp_team.json has already been created so that we don't need to repeat player input
+    if os.path.exists('opp_team.json'):
+        # File exists so read my team and opposing team players
+        import_team_json('opp_team.json', opp_team)
+
+    print('Done Initialization!')
 
     exit_script = 0
 
@@ -258,11 +339,13 @@ def main():
                 # Compare stats = create CSV of rostered players' stats
                 elif choice == 5:
 
-                    file_name = 'Team Stats.csv'
+                    file_name = 'Weekly Team Stats.csv'
                     header_one = [['My Team'],['']]
                     data_header = [['Player','Stat Type','Games Played','Minutes per Game','Points per Game','Rebounds',
                                    'Assists','Steals','Blocks', '3PM','FG%', 'FT%','Turnovers'],['']]
                     header_two = [[''],['Opposing Team'],['']]
+                    my_total_proj, my_total_curr = my_team.get_totals()
+                    opp_total_proj, opp_total_curr = opp_team.get_totals()
 
                     with open(file_name,'w',newline='') as f:
                         writer = csv.writer(f)
@@ -270,13 +353,32 @@ def main():
                         writer.writerows(header_one)
                         writer.writerows(data_header)
                         writer.writerows(my_team.team_data())
+                        writer.writerow(my_total_proj)
+                        writer.writerow(my_total_curr)
 
                         writer.writerows(header_two)
                         writer.writerows(data_header)
                         writer.writerows(opp_team.team_data())
+                        writer.writerow(opp_total_proj)
+                        writer.writerow(opp_total_curr)
 
                 # End program
                 elif choice == 6:
+                    while True:
+                        save = input('Save current teams? [Y/N] ')
+
+                        # Save teams into JSON files
+                        if save.lower() == 'y':
+                            export_teams_json(my_team,opp_team)
+                            break
+
+                        # No saving needs to be done, so continue
+                        elif save.lower() == 'n':
+                            break
+                        else:
+                            print('Incorrect input!')
+
+
                     print('Goodbye!')
                     exit_script = 1
 
